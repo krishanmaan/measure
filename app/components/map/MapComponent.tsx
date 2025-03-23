@@ -47,7 +47,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fieldPolygons, setFieldPolygons] = useState<google.maps.Polygon[]>([]);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
-
+  
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);
 
@@ -159,10 +159,10 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
         paths: savedField.coordinates,
         fillColor: '#00C853',
         fillOpacity: 0.3,
-        strokeWeight: 2,
+            strokeWeight: 2,
         strokeColor: '#00C853',
         editable: true,
-        draggable: true,
+            draggable: true,
       });
 
       // Set polygon on map
@@ -180,7 +180,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
       drawingManagerRef.current.setDrawingMode(null);
 
       // Cleanup function
-      return () => {
+    return () => {
         polygon.setMap(null);
       };
     }
@@ -195,63 +195,63 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
   }
 
   return (
-    <div className="flex flex-col h-screen w-full">
-      <Navbar onPlaceSelect={handlePlaceSelect} />
-      <div style={mapStyles.container}>
-        <GoogleMap
-          mapContainerStyle={mapStyles.map}
-          center={defaultCenter}
-          zoom={15}
-          onLoad={onLoad}
-          onUnmount={onUnmount}
-          options={mapOptions}
-        >
-          {/* User location marker */}
-          {userLocation && (
-            <>
-              <Marker
-                position={userLocation}
-                icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 12,
-                  fillColor: '#4285F4',
-                  fillOpacity: 1,
-                  strokeColor: '#FFFFFF',
-                  strokeWeight: 2,
-                }}
-                zIndex={1000}
-              />
-              <Circle
-                center={userLocation}
-                radius={20}
-                options={{
-                  fillColor: '#4285F4',
-                  fillOpacity: 0.2,
-                  strokeColor: '#4285F4',
-                  strokeOpacity: 0.5,
-                  strokeWeight: 1,
-                }}
-              />
-            </>
-          )}
-        </GoogleMap>
+      <div className="flex flex-col h-screen w-full">
+        <Navbar onPlaceSelect={handlePlaceSelect} />
+        <div style={mapStyles.container}>
+          <GoogleMap
+            mapContainerStyle={mapStyles.map}
+            center={defaultCenter}
+            zoom={15}
+            onLoad={onLoad}
+            onUnmount={onUnmount}
+            options={mapOptions}
+          >
+            {/* User location marker */}
+            {userLocation && (
+              <>
+                <Marker
+                  position={userLocation}
+                  icon={{
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#4285F4',
+                    fillOpacity: 1,
+                    strokeColor: '#FFFFFF',
+                    strokeWeight: 2,
+                  }}
+                  zIndex={1000}
+                />
+                <Circle
+                  center={userLocation}
+                  radius={20}
+                  options={{
+                    fillColor: '#4285F4',
+                    fillOpacity: 0.2,
+                    strokeColor: '#4285F4',
+                    strokeOpacity: 0.5,
+                    strokeWeight: 1,
+                  }}
+                />
+              </>
+            )}
+          </GoogleMap>
 
         {/* Add Save Button */}
         {fieldPolygons.length > 0 && (
           <div className="absolute bottom-24 right-4">
             <SaveButton polygon={fieldPolygons[fieldPolygons.length - 1]} />
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
 
-      <MapControls
-        currentMapType={mapType}
-        onMapTypeChange={setMapType}
-        onLocationClick={handleLocationClick}
-        onToggleFullscreen={handleToggleFullscreen}
-        isLocating={isLocating}
-      />
-    </div>
+        <MapControls
+          currentMapType={mapType}
+          onMapTypeChange={setMapType}
+          onLocationClick={handleLocationClick}
+          onToggleFullscreen={handleToggleFullscreen}
+          isLocating={isLocating}
+        />
+      </div>
   );
 };
 
