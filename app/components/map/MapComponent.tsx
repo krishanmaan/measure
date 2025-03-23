@@ -9,6 +9,7 @@ import ZoomControls from './ZoomControls';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLocationDot, faFileImport, faDrawPolygon, faRuler, faMapMarker, faPlus, faUndo, faRedo } from '@fortawesome/free-solid-svg-icons';
 import SearchBox from './SearchBox';
+import SaveButton from './SaveButton';
 
 // Local utility function for className merging
 function cn(...classNames: (string | undefined)[]) {
@@ -1900,6 +1901,13 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className }) 
               />
             ))}
           </GoogleMap>
+
+          {/* Add Save Button */}
+          {fieldPolygons.length > 0 && (
+            <div className="absolute bottom-24 right-4">
+              <SaveButton polygon={fieldPolygons[fieldPolygons.length - 1]} />
+            </div>
+          )}
 
           {/* Add undo/redo buttons */}
           {isDrawingMode && (
