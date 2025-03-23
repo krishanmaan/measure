@@ -12,6 +12,7 @@ import {
   updateProfile,
   setPersistence,
   browserLocalPersistence,
+  AuthError,
 } from 'firebase/auth';
 import { ref, set, get } from 'firebase/database';
 import { auth, database } from '../firebase/config';
@@ -70,13 +71,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
       const result = await signInWithPopup(auth, provider);
       if (result.user) {
         await saveUserToDatabase(result.user);
       }
     } catch (error) {
+      const authError = error as AuthError;
       console.error('Error signing in with Google:', error);
-      throw error;
+      
+      // Handle specific error cases
+      if (authError.code === 'auth/popup-closed-by-user' || authError.code === 'auth/cancelled-popup-request') {
+        // User closed the popup or multiple popups were opened
+        console.log('Sign-in popup was closed or cancelled');
+        return; // Don't throw error for user-initiated cancellation
+      }
+      
+      if (authError.code === 'auth/popup-blocked') {
+        throw new Error('Popup was blocked by your browser. Please allow popups for this site.');
+      }
+      
+      throw new Error('Failed to sign in with Google. Please try again.');
     }
   };
 

@@ -7,18 +7,20 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Measure App",
-  description: "Measure your progress",
+  description: "Measure and calculate field areas",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+      <body className={inter.className} suppressHydrationWarning={true}>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
