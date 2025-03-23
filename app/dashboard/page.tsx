@@ -6,43 +6,73 @@ import { useAuth } from '../context/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faMapMarkerAlt } from '@fortawesome/free-solid-svg-icons';
 import { database } from '../firebase/config';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get } from 'firebase/database';
 
 interface Polygon {
   id: string;
   area: number;
   coordinates: { lat: number; lng: number }[];
   createdAt: string;
+  userId: string;
+  userEmail: string;
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [polygons, setPolygons] = useState<Polygon[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
-      router.push('/');
+      if (!loading) {
+        router.push('/');
+      }
       return;
     }
 
-    // Subscribe to polygon updates
-    const polygonsRef = ref(database, `users/${user.uid}/polygons`);
-    const unsubscribe = onValue(polygonsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const polygonList = Object.entries(data).map(([id, value]: [string, any]) => ({
-          id,
-          ...value,
-        }));
-        setPolygons(polygonList);
-      } else {
-        setPolygons([]);
-      }
-    });
+    const loadPolygons = async () => {
+      try {
+        // First try to get the data directly
+        const polygonsRef = ref(database, `users/${user.uid}/polygons`);
+        const snapshot = await get(polygonsRef);
+        
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const polygonList = Object.entries(data).map(([id, value]: [string, any]) => ({
+            id,
+            ...value,
+          }));
+          setPolygons(polygonList);
+        } else {
+          setPolygons([]);
+        }
 
-    return () => unsubscribe();
-  }, [user, router]);
+        // Then set up real-time listener
+        const unsubscribe = onValue(polygonsRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            const polygonList = Object.entries(data).map(([id, value]: [string, any]) => ({
+              id,
+              ...value,
+            }));
+            setPolygons(polygonList);
+          } else {
+            setPolygons([]);
+          }
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Error loading polygons:', error);
+        setPolygons([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPolygons();
+  }, [user, router, loading]);
 
   const handleLogout = async () => {
     try {
@@ -62,6 +92,14 @@ export default function Dashboard() {
       minute: '2-digit',
     });
   };
+
+  if (loading || isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-xl text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   if (!user) return null;
 

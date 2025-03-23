@@ -10,6 +10,8 @@ import {
   onAuthStateChanged,
   User,
   updateProfile,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import { ref, set, get } from 'firebase/database';
 import { auth, database } from '../firebase/config';
@@ -31,14 +33,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize persistence
+  useEffect(() => {
+    const initializePersistence = async () => {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+        console.log("Firebase persistence initialized");
+      } catch (error) {
+        console.error("Error initializing persistence:", error);
+      }
+    };
+    initializePersistence();
+  }, []);
+
   // Save user data to realtime database
   const saveUserToDatabase = async (user: User) => {
-    const userRef = ref(database, `users/${user.uid}`);
-    await set(userRef, {
-      name: user.displayName,
-      email: user.email,
-      photoURL: user.photoURL,
-    });
+    try {
+      const userRef = ref(database, `users/${user.uid}`);
+      
+      // First check if user data exists
+      const snapshot = await get(userRef);
+      if (!snapshot.exists()) {
+        // Only save if user data doesn't exist
+        await set(userRef, {
+          name: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL,
+        });
+      }
+    } catch (error) {
+      console.error("Error saving user to database:", error);
+    }
   };
 
   // Google Sign In
@@ -51,6 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error) {
       console.error('Error signing in with Google:', error);
+      throw error;
     }
   };
 
@@ -73,7 +99,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Email/Password Login
   const loginWithEmail = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      if (result.user) {
+        await saveUserToDatabase(result.user);
+      }
     } catch (error) {
       console.error('Error logging in with email:', error);
       throw error;
@@ -86,16 +115,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await signOut(auth);
     } catch (error) {
       console.error('Error logging out:', error);
+      throw error;
     }
   };
 
+  // Listen to auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // If user exists, ensure their data is in the database
+        await saveUserToDatabase(user);
+      }
       setUser(user);
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   const value = {
