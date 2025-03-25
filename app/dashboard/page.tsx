@@ -17,7 +17,25 @@ interface Polygon {
   coordinates: any[];
   createdAt: string;
   userId: string;
-  userEmail: string;
+}
+
+interface GoogleProfile {
+  locale: string;
+  picture: string;
+  given_name: string;
+  family_name: string;
+  verified_email: boolean;
+}
+
+interface UserData {
+  name: string | null;
+  email: string | null;
+  photoURL: string | null;
+  phoneNumber: string | null;
+  createdAt: string;
+  lastLogin: string;
+  provider: string;
+  googleProfile?: GoogleProfile;
 }
 
 export default function Dashboard() {
@@ -25,6 +43,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [polygons, setPolygons] = useState<Polygon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -32,22 +51,41 @@ export default function Dashboard() {
       return;
     }
 
+    // Fetch user data
+    const userRef = ref(database, `users/${user.uid}`);
+    const userUnsubscribe = onValue(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setUserData(snapshot.val());
+      }
+    });
+
+    // Fetch polygons
     const polygonsRef = ref(database, `users/${user.uid}/polygons`);
-    const unsubscribe = onValue(polygonsRef, (snapshot) => {
+    const polygonsUnsubscribe = onValue(polygonsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const polygonList = Object.entries(data).map(([id, value]: [string, any]) => ({
-          id,
-          ...value,
-        }));
-        setPolygons(polygonList);
+        try {
+          const polygonList = Object.entries(data).map(([id, value]: [string, any]) => ({
+            id,
+            ...value,
+          }));
+          setPolygons(polygonList);
+        } catch (error) {
+          console.error("Error processing polygon data:", error);
+        }
       } else {
         setPolygons([]);
       }
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching polygons:", error);
+      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      userUnsubscribe();
+      polygonsUnsubscribe();
+    };
   }, [user, router]);
 
   const handleCreateNew = () => {
@@ -55,7 +93,6 @@ export default function Dashboard() {
   };
 
   const handleFieldClick = (polygon: Polygon) => {
-    // Navigate to map with polygon data
     router.push(`/map?field=${encodeURIComponent(JSON.stringify(polygon))}`);
   };
 
@@ -78,29 +115,30 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="bg-white shadow rounded-lg mb-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {user?.photoURL ? (
-                <Image
-                  src={user.photoURL}
-                  alt="Profile"
-                  width={40}
-                  height={40}
-                  className="rounded-full"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
-                  {user?.displayName?.[0] || user?.email?.[0] || 'U'}
-                </div>
-              )}
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {user?.displayName || 'User'}
-                </h2>
-                <p className="text-sm text-gray-500">{user?.email}</p>
-              </div>
+            <div className="flex items-center gap-4">
+              <Link href="/profile" className="cursor-pointer">
+                {userData?.photoURL ? (
+                  <Image
+                    src={userData.photoURL}
+                    alt="Profile"
+                    width={60}
+                    height={60}
+                    className="rounded-full hover:ring-2 hover:ring-green-500 transition-all"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-black text-xl font-bold hover:ring-2 hover:ring-green-300 transition-all">
+                    {userData?.name?.[0] || userData?.email?.[0] || 'U'}
+                  </div>
+                )}
+              </Link>
+              <h2 className="text-2xl font-semibold text-gray-900">
+                {userData?.googleProfile?.given_name 
+                  ? `${userData.googleProfile.given_name} ${userData.googleProfile.family_name}`
+                  : userData?.name || 'User'}
+              </h2>
             </div>
             <div className="flex items-center space-x-4">
               <Link
@@ -122,7 +160,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-6xl mx-auto">
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
             {polygons.map((polygon) => (
               <div
                 key={polygon.id}
@@ -131,9 +169,9 @@ export default function Dashboard() {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                       <FontAwesomeIcon icon={faMapMarkerAlt} className="text-green-500" />
-                      Field -{polygon.id.slice(0, 7)}
+                      Field - {polygon.id.slice(0, 7)}
                     </h2>
                     <p className="text-gray-600">Area: {polygon.area.toFixed(2)} hectares</p>
                     <p className="text-gray-500 text-sm mt-2">
@@ -147,7 +185,7 @@ export default function Dashboard() {
 
           {polygons.length === 0 && (
             <div className="text-center text-gray-500 mt-8">
-              No fields saved yet. Click &quot;Create New&quot; to add your first field.
+              No fields saved yet Click "New Field" to add your first field.
             </div>
           )}
         </div>

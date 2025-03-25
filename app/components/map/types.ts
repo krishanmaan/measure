@@ -11,7 +11,7 @@ export interface Field {
   measurements: { length: number; width: number; }[];
 }
 
-export type MapType = 'hybrid' | 'satellite' | 'roadmap' | 'terrain';
+export type MapType = 'satellite' | 'hybrid' | 'roadmap' | 'terrain';
 
 export const libraries: ("drawing" | "geometry" | "places")[] = ["drawing", "geometry", "places"];
 
@@ -28,7 +28,7 @@ export const mapStyles = {
 };
 
 export const defaultCenter = {
-  lat: 27.342860470286933, 
+  lat: 27.342860470286933,
   lng: 75.79046143662488,
 };
 
