@@ -41,12 +41,53 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
   });
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [mapType, setMapType] = useState<'satellite' | 'hybrid' | 'roadmap' | 'terrain'>('hybrid');
+  const [mapType, setMapType] = useState<'satellite' | 'hybrid' | 'roadmap' | 'terrain'>('satellite');
   const [userLocation, setUserLocation] = useState<google.maps.LatLng | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fieldPolygons, setFieldPolygons] = useState<google.maps.Polygon[]>([]);
+  const [activePolygonIndex, setActivePolygonIndex] = useState<number | null>(null);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+
+  // Function to lock polygon (make it non-editable and non-draggable)
+  const lockPolygon = useCallback((polygon: google.maps.Polygon) => {
+    polygon.setOptions({
+      editable: false,
+      draggable: false,
+      strokeColor: '#00C853',
+      fillColor: '#00C853',
+    });
+  }, []);
+
+  // Function to unlock polygon (make it editable and draggable)
+  const unlockPolygon = useCallback((polygon: google.maps.Polygon) => {
+    polygon.setOptions({
+      editable: true,
+      draggable: true,
+      strokeColor: '#00C853',
+      fillColor: '#00C853',
+    });
+  }, []);
+
+  // Toggle polygon lock state when clicked
+  const handlePolygonClick = useCallback((polygon: google.maps.Polygon, index: number) => {
+    // Lock all polygons first
+    fieldPolygons.forEach((p, i) => {
+      if (i !== index) {
+        lockPolygon(p);
+      }
+    });
+
+    if (activePolygonIndex === index) {
+      // If clicking on active polygon, lock it
+      lockPolygon(polygon);
+      setActivePolygonIndex(null);
+    } else {
+      // If clicking on inactive polygon, unlock it
+      unlockPolygon(polygon);
+      setActivePolygonIndex(index);
+    }
+  }, [fieldPolygons, activePolygonIndex, lockPolygon, unlockPolygon]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);
@@ -73,10 +114,64 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
 
     // Add polygon complete listener
     google.maps.event.addListener(drawingManager, 'polygoncomplete', (polygon: google.maps.Polygon) => {
+      // Add click listener to the polygon
+      google.maps.event.addListener(polygon, 'click', () => {
+        const newIndex = fieldPolygons.length;
+        handlePolygonClick(polygon, newIndex);
+      });
+
+      // Add the polygon to state
       setFieldPolygons((prev) => [...prev, polygon]);
+      
+      // Set drawing mode to null and disable drawing if we have a polygon
       drawingManager.setDrawingMode(null);
+      drawingManager.setOptions({
+        drawingControl: false // Disable drawing control after polygon is created
+      });
+      
+      // Lock the newly created polygon after a short delay (to ensure it's fully drawn)
+      setTimeout(() => {
+        lockPolygon(polygon);
+      }, 100);
     });
-  }, []);
+  }, [lockPolygon, handlePolygonClick, fieldPolygons]);
+
+  // Enable or disable drawing manager based on polygon count
+  useEffect(() => {
+    if (drawingManagerRef.current && map) {
+      // If we have polygons, disable drawing
+      if (fieldPolygons.length > 0) {
+        drawingManagerRef.current.setOptions({
+          drawingControl: false
+        });
+      } else {
+        // If no polygons, enable drawing
+        drawingManagerRef.current.setOptions({
+          drawingControl: true
+        });
+      }
+    }
+  }, [fieldPolygons.length, map]);
+
+  // Function to handle polygon deletion
+  const handleDeletePolygon = useCallback(() => {
+    if (activePolygonIndex !== null && fieldPolygons.length > 0) {
+      // Remove the active polygon from the map
+      fieldPolygons[activePolygonIndex].setMap(null);
+      
+      // Remove from state
+      const newPolygons = fieldPolygons.filter((_, i) => i !== activePolygonIndex);
+      setFieldPolygons(newPolygons);
+      setActivePolygonIndex(null);
+      
+      // Re-enable drawing control if all polygons are removed
+      if (newPolygons.length === 0 && drawingManagerRef.current) {
+        drawingManagerRef.current.setOptions({
+          drawingControl: true
+        });
+      }
+    }
+  }, [activePolygonIndex, fieldPolygons]);
 
   const onUnmount = useCallback(() => {
     setMap(null);
@@ -161,12 +256,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
         fillOpacity: 0.3,
         strokeWeight: 2,
         strokeColor: '#00C853',
-        editable: true,
-        draggable: true,
+        editable: false,
+        draggable: false,
       });
 
       // Set polygon on map
       polygon.setMap(map);
+      
+      // Add click listener to the polygon
+      google.maps.event.addListener(polygon, 'click', () => {
+        handlePolygonClick(polygon, 0);
+      });
+      
       setFieldPolygons([polygon]);
 
       // Fit bounds to show the polygon
@@ -176,15 +277,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
       });
       map.fitBounds(bounds);
 
-      // Disable drawing mode
+      // Disable drawing mode and drawing control
       drawingManagerRef.current.setDrawingMode(null);
+      drawingManagerRef.current.setOptions({
+        drawingControl: false
+      });
 
       // Cleanup function
       return () => {
         polygon.setMap(null);
       };
     }
-  }, [savedField, map]);
+  }, [savedField, map, handlePolygonClick]);
 
   if (loadError) {
     return <div>Error loading maps</div>;
@@ -237,9 +341,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ onAreaUpdate, className, sa
         </GoogleMap>
 
         {/* Add Save Button */}
-        {fieldPolygons.length > 0 && (
-          <div className="absolute bottom-24 right-4">
-            <SaveButton polygon={fieldPolygons[fieldPolygons.length - 1]} />
+        {fieldPolygons.length > 0 && activePolygonIndex !== null && (
+          <div className="absolute bottom-24 right-4 flex flex-col gap-3">
+            <SaveButton polygon={fieldPolygons[activePolygonIndex]} />
+            <button
+              onClick={handleDeletePolygon}
+              className="bg-red-500 text-white p-3 rounded-full shadow-lg hover:bg-red-600 transition-colors"
+              title="Delete polygon"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
